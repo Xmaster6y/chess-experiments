@@ -1,0 +1,17 @@
+name: Bug
+description: File a bug.
+title: "[Bug] "
+labels: ["bug"]
+projects: ["yp-edu/1"]
+assignees:
+  - Xmaster6y
+type: bug
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us, what did you expect to happen?
+      placeholder: Tell us what you see.
+    validations:
+      required: true
