@@ -1,3 +1,130 @@
 \section{Background}
 
-Background required for the paper.
+\subsection{Monte Carlo Tree Search}
+
+\paragraph{Heuristic network}The studied agent, introduced as AlphaZero \cite{silver2018general}, is a heuristic network used in a Monte-Carlo tree search (MCTS) \cite{Coulom2006EfficientSA, kocsis2006bandit}. The network is traditionally trained on self-play to collect data, i.e. the network is frozen and plays against a duplicate version of itself. After the collection phase, the network is trained to predict a policy vector for the next move based on the MCTS statistics and a current state value based on the outcomes of the played games. Here, more specifically, the full network $\mathcal{F}_\theta$, parametrized by $\theta$, can be describe as a tuple,
+\begin{equation}
+    \mathcal{F}_\theta(s) = \left[\mathcal{P}_\theta(s),\,\mathcal{W}_\theta(s),\, \mathcal{M}_\theta(s)\right],
+\end{equation}
+with $\mathcal{P}_\theta(s)$ the policy vector, $\mathcal{W}_\theta(s)$ the win-draw-lose probability and $\mathcal{M}_\theta(s)$ the moves left.
+The three heads share a Squeeze-and-Excitation (SE) backbone \cite{hu2019squeezeandexcitation}, based on ResNet \cite{he2016deep}.
+The state $s$ fed to the network is made of the current board as well as the 7 previous boards.
+These boards are decomposed into one-hot planes that we describe in the next paragraphs.
+The computation process is illustrated in figure \ref{fig:background}; for more details, we refer the reader to the exact implementation in \cite{pascutto2019leela}.
+
+% \begin{figure}[H]
+%      \centering
+%      \begin{subfigure}[b]{0.26\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{figures/Board.pdf}
+%          \caption{Board encoding}
+%          \label{fig:background_a}
+%      \end{subfigure}
+%      \hspace{8em}
+%      \begin{subfigure}[b]{0.26\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{figures/CNN.pdf}
+%          \caption{Network backbone}
+%      \end{subfigure}
+%      \\
+%      \begin{subfigure}[b]{0.26\textwidth}
+%          \centering
+%          \begin{tikzpicture}
+%             \draw (0, 0) node[inner sep=0]
+%             {\includegraphics[width=\textwidth]{figures/Heads.pdf}};
+%             \draw (2.3, 1) node {$\mathcal{P}_\theta(s)$};
+%             \draw (2.3, 0) node {$\mathcal{W}_\theta(s)$};
+%             \draw (2.3, -1) node {$\mathcal{M}_\theta(s)$};
+%         \end{tikzpicture}
+%          \caption{Heads prediction}
+%      \end{subfigure}
+%      \hspace{8em}
+%      \begin{subfigure}[b]{0.26\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{figures/MCTS.pdf}
+%          \caption{MCTS}
+%      \end{subfigure}
+%      \caption{Modelling components; first, the boards are encoded into planes (a) and fed to the network backbone (b).
+%      The different heads use the extracted features to make heuristic predictions (c) guiding the MCTS when encountering new nodes (d).}
+%      \label{fig:background}
+% \end{figure}
+
+
+\paragraph{Board encoding}
+The current position is encoded using planes, formally channels, equivalent to the colours in images, in a tensor of the shape $112\times8\times8$. The 112 planes can be first decomposed into two parts, the first 104 planes corresponding to the history planes (8 last boards) and 8 additional planes encoding the game metadata.
+Each board of the history is encoded through 13 distinct planes, comprising two sets of 6 sparse planes each for the current\footnote{Note that the player is the same for all 8 boards of the history.}
+player's and the opponent's pieces, as illustrated in figure \ref{fig:background_a}.
+The last 8 planes are always full planes and represent meta information like the castling rights, the current player's colour and the half-move clock value.
+
+
+\paragraph{Move encoding}
+
+The policy outputted by the network is a vector of size 1858. This number is obtained considering each starting position and counting all accessible ending positions using queen and knight moves. The different promotions should also be accounted for, with promotion to knight being the default in lc0. Note that as the corresponding moves are relative to the swapped board, promotion is only possible at rank 8. This table is hardcoded within the chess engine for programming efficiency and readability.
+
+
+\paragraph{Tree-search} The AlphaZero \cite{silver2018general} and its open-source version LeelaZero \cite{pascutto2019leela} are based on evaluation and tree search similar to Stockfish NNUE. The search algorithm is based on MCTS \cite{Coulom2006EfficientSA, kocsis2006bandit} using a slightly modified version of the upper bound confidence of the PUCT algorithm \cite{Rosin2011MultiarmedBW}, equation \ref{eq:upper_confidence_boundary}.
+
+
+\begin{equation}
+\label{eq:upper_confidence_boundary}
+    U(s,a)=Q(s,a)+c_{\rm puct}\cdot P(s,a) \cdot \dfrac{\sqrt{\sum_b N(s,b)}}{1+N(s,a)}
+\end{equation}
+
+In practice, the $Q$-values $Q(s,a)$ are obtained through the value $V(s+a)$, and by adding the move-left-head utility $M_\theta(s+a)$ defined in equation \ref{eq:mlh}.
+The value is simply computed using the network outputted probabilities and the defined reward $\mathcal{W}_\theta(s+a)\cdot R$. These engineering tricks make the network tuning flexible, e.g., to incentivise drawing or aiming for short games.
+
+\begin{equation}
+\label{eq:mlh}
+    M(s+a)={\rm sign}(-V(s+a))
+    \cdot\Pi_{m_{\rm max}}\left[m
+    \cdot\left(\mathcal{M}_\theta(s+a)-\mathcal{M}_\theta(s)\right)
+    \right]
+    \cdot \chi \left[\overset{\sim}{V}(s+a)\right]
+\end{equation}
+
+With $\chi$ a second-degree polynomial function and $\overset{\sim}{V}$ the extra-value ratio defined as:
+
+\begin{equation}
+\label{eq:vmlh}
+    \overset{\sim}{V}(s+a)={\rm ReLU}\left(\dfrac{|V(s+a)|-V_{\rm threshold}}{1-V_{\rm threshold}}\right)
+\end{equation}
+
+Here, the final bound used, equation \ref{eq:practical_upper_confidence_boundary}, doesn't rely on the visit could $N(s,a)$. It thus can be used with the raw output of the neural network to perform the sampling.
+
+\begin{equation}
+\label{eq:practical_upper_confidence_boundary}
+    U(s,a)=\alpha V(s+a)+\beta M(s+a)+\gamma \mathcal{P}_\theta(s,a)
+\end{equation}
+
+
+\subsection{Layerwise Relevance Propagation}
+
+\paragraph{Input sensitivity} The basic idea behind saliency maps is for a given output $\mathcal{O}$ to attribute a sensitivity value called relevance for each input $\mathcal{I}$, described in equation \ref{eq:sensitivity}. By computing an estimator of this quantity, it is possible to interpret which inputs were primarily used for a model's prediction. We discuss potential limitations and controversies in the section \ref{sec:lim}.
+
+\begin{equation}
+\label{eq:sensitivity}
+\mathcal{R}= \dfrac{\delta \mathcal{O}}{\delta \mathcal{I}}
+\end{equation}
+
+Naturally, saliency maps have an intrinsic link with the gradient \cite{Simonyan2013DeepIC}. In terms of differential function, we can compute the sensitivity using the gradient estimator as
+\begin{equation}
+\label{eq:grad}
+\mathcal{\hat{R}}= \dfrac{\partial \mathcal{O}}{\partial \mathcal{I}}
+\end{equation}
+In practice, this method suffers from noise, yet some refinements have been proposed and are outlined in section \ref{sec:related_work}.
+
+\paragraph{Relevance propagation}
+Relevance propagation methods, introduced by layer-wise relevance \cite{Bach2015OnPE}, are based on local rules that compute from local relevances.
+The locally computed relevance transfers local regularities to extract global information. This method is thus less sensitive to noise because it is locally controlled, and having specific rules for different DNN blocks compensates the architecture dependence of saliency maps as pointed out by \cite{Adebayo2018SanityCF}.
+The process of relevance propagation can be intuited as a redistribution flow. The relevance $\mathcal{R}^{(l+1)}_k$ is decomposed in ``messages'', $\mathcal{R}^{(l,l+1)}_{j\leftarrow k}$, from the $k$-th neuron of the layer $l+1$ to the $j$-th layer of the layer $l$ using specific rules as in the equation $\ref{eq:lrp_0}$. The new relevance $\mathcal{R}^{(l)}_k$ is then obtained by summing each "message" sent, as described by equation $\ref{eq:lrp_rule}$.
+
+\begin{equation}
+\label{eq:lrp_rule}
+\mathcal{R}^{(l)}_k=\sum_j\mathcal{R}^{(l,l+1)}_{j\leftarrow k}
+\end{equation}
+with $\mathcal{R}^{(l,l+1)}_{j\leftarrow k}$ being the local rule that transfer relevance. For example, the logit ratio between input and output is called LRP-0 and is defined in equation \ref{eq:lrp_0}. We succinctly outline the rules used in section \ref{sec:method_relevance} and refer to \cite{2019LayerWiseRP} for a complete rule description.
+
+\begin{equation}
+\label{eq:lrp_0}
+\mathcal{R}^{(l,l+1)}_{j\leftarrow k} = \dfrac{z_{jk} }{z_k}\mathcal{R}^{(l+1)}_k
+\end{equation}

@@ -1,3 +1,56 @@
 \section{Methods}
 
-Methods used in the paper.
+\subsection{Problem Formulation}
+
+The final objective of the MCTS is to return values to take a decision. The final scores that could be used in the move choice are the initial state $Q$-values $Q(s_0, a)$ and visit counts $N(s_0, a)$. We will denote these quantities as $S$, each of them are the sum over the rollouts of $S_r$.
+
+\begin{equation}
+    S = \sum_{r} S_r
+\end{equation}
+
+We are interested in interpreting the output score $S$ with respect to an input $\mathcal{I}$. By the additivity of the explanations, we have:
+\begin{equation}
+    \frac{\delta S}{\delta \mathcal{I}} = \sum_{r} \frac{\delta S_r}{\delta\mathcal{I}},
+\end{equation}
+ and thus we can focus on interpreting the score $S_r$ with respect to the input $\mathcal{I}$. For that we view this score as a sequence of composed functions:
+
+\begin{equation}
+    U_r(s,a)=\sum_{k=1}^r Q_k(s,a)+c_{\rm puct}\cdot P(s,a) \cdot \dfrac{\sqrt{\sum_b \sum_{k=1}^r N_k(s,b)}}{1+\sum_{k=1}^r N_k(s,a)}
+\end{equation}
+
+ \begin{equation}
+    \mathcal{C}_r(s) \equiv \underset{a}{\rm argmax}~ U_r(s, a)
+ \end{equation}
+
+
+ \begin{equation}
+    \mathcal{P}\circ \mathcal{C}_r(s) \equiv \mathcal{P}(s, \mathcal{C}_r(s))
+ \end{equation}
+
+ \begin{equation}
+    N_r(s_0, a) = \underset{a}{1\!\!1} \left[a = \mathcal{C}_r(s_0)\right]
+ \end{equation}
+ \begin{equation}
+    Q_r(s_0, a) = (-1)^{n_r} \mathcal{E}\circ\left(\mathcal{P}\circ \mathcal{C}_r\right)^{n_r}(s_0) * \underset{a}{1\!\!1} \left[a = \mathcal{C}_r(s_0)\right]
+ \end{equation}
+
+If we denote $\mathcal{T}_r=(s_0, ..., s_{n_r})$ the trajectory of the rollout $r$, we have:
+\begin{equation}
+    s_i = \left(\mathcal{P}\circ \mathcal{C}_r\right)^{i}(s_0)
+ \end{equation}
+
+ \begin{equation}
+    Q_r(s_i, a) = (-1)^{n_r-i}\mathcal{E}(s_{n_r}) * \underset{a}{1\!\!1}\left[\mathcal{P}(s_i,a) \in \mathcal{T}_r\right]
+ \end{equation}
+
+ \begin{equation}
+    \frac{\delta \mathcal{C}_r(s_i)}{\delta s_i}\equiv \frac{\delta U_r(s_i, \mathcal{C}_r(s_i)) }{\delta s_i}
+ \end{equation}
+
+ \begin{equation}
+    \frac{\delta}{\delta s_i}\underset{a}{1\!\!1} \left[a = \mathcal{C}_r(s_i)\right]\equiv \frac{\delta U_r(s_i, \mathcal{C}_r(s_i)) }{\delta s_i}  * \underset{a}{1\!\!1} \left[a = \mathcal{C}_r(s_i)\right]
+ \end{equation}
+
+ \begin{equation}
+    \frac{\delta \mathcal{P}(s, a)}{\delta s}\equiv \underset{q}{1\!\!1}\left[q \in a(1)\right] - \underset{q}{1\!\!1}\left[q \in a(0)\right]
+ \end{equation}

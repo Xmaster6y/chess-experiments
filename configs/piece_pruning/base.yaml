@@ -1,0 +1,16 @@
+defaults:
+  - _self_
+
+model: lczerolens/maia-1900
+dataset: lczerolens/tcec-boards
+fen: null  # override for single-board: "8/1P1BpQ2/3rp3/1K2kp1P/6b1/1P1p4/1R3R2/2B5 w - - 0 1"
+num_samples: 8
+seed: 42
+mcts_iterations: 20
+evaluators:
+  - global_sensitivity
+  - square_impact
+  - bestmove_impact
+  - model_impact
+save_heatmaps: true
+heatmap_limit: 4

@@ -1,0 +1,9 @@
+defaults:
+  - base
+
+num_samples: 2
+mcts_iterations: 10
+evaluators:
+  - global_sensitivity
+  - square_impact
+heatmap_limit: 2

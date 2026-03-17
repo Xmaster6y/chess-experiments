@@ -1,0 +1,5 @@
+defaults:
+  - base
+
+num_samples: 64
+save_viz: false

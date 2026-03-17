@@ -6,4 +6,4 @@
 - **Outputs**: Hydra writes to `results/hydra/...` (git-ignored). Logging (e.g. wandb) is configured in the default config.
 - **Tests**: Add or extend tests under `tests/` (e.g. `tests/unit/test_core.py`); run with `uv run pytest`.
 - **Launch**: For cluster/slurm, use scripts in `launch/` (e.g. `launch/cv/experiment.sh`); see `launch/README.md`.
-- **Code**: Core logic lives in `src/research_project_template/`; import in script modules as needed. Keep changes small and reviewable.
+- **Code**: Core logic lives in `src/chess_experiments/`; import in script modules as needed. Keep changes small and reviewable.

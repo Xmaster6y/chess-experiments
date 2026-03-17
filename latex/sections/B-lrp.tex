@@ -1,0 +1,25 @@
+\section{LRP Rules}
+
+
+In order to compute the relevant board information used by the network, we use the LRP method to attribute the input relevances.
+Intuitively, the relevance propagation rules should be dependent on the layer's nature, as is the forward flow. Fundamentally, this idea comes from the ambition of tracking the model's various kinds of actual computation into each relevance. The classical framework for deriving these rules is Deep Taylor's series Decomposition (DTD) \cite{Montavon2015ExplainingNC}, yet it should be justified with care \cite{Sixt2022ARS}. The rules used for attributing the relevances are described below.
+
+
+\paragraph{LRP-$\epsilon$ \cite{Bach2015OnPE}}
+Defined by the equation \ref{eq:lrpe_rule}, it introduces $\epsilon$, a numerical stabilizer and the $z$ coefficients are set accordingly to the equation \ref{eq:lrp_0}. A variant of this rule can be computed by setting the biases to $0$, but this is not enough for the propagation to be conservative. The stabiliser $\epsilon$ will absorb some relevance and should, therefore, be kept as small as possible.
+
+
+\begin{equation}
+\label{eq:lrpe_rule}
+\mathcal{R}^{(l,l+1)}_{j\leftarrow k} =\dfrac{z_{jk}}{z_{k}+\epsilon \cdot {\rm sign}\left(z_{k}\right)}\mathcal{R}^{(l)}_k
+\end{equation}
+
+
+\paragraph{$z^+$ \cite{Montavon2015ExplainingNC}}
+Defined by the equation \ref{eq:zplus_rule}, where $w_{kj}^+$ stands for the positive part of $w_{kj}$, i.e. $w_{kj}^+$ if $w_{kj}<0$. This rule is conservative and positive (and thus consistent \cite{Montavon2015ExplainingNC}). In practice, this rule is used for convolution.
+
+
+\begin{equation}
+\label{eq:zplus_rule}
+\mathcal{R}^{(l,l+1)}_{j\leftarrow k} =\dfrac{w_{kj}^+a_{j}}{\sum_jw_{kj}^+a_{j}} \mathcal{R}^{(l)}_k
+\end{equation}

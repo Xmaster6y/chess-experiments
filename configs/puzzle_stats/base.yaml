@@ -1,0 +1,9 @@
+defaults:
+  - _self_
+
+model: lczerolens/maia-1100
+dataset: lczerolens/lichess-puzzles-mate-in-1
+num_samples: 512
+seed: 42
+save_viz: true
+viz_limit: 10

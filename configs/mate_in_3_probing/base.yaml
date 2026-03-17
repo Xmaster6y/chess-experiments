@@ -1,0 +1,16 @@
+defaults:
+  - _self_
+
+model: lczerolens/maia-1100
+dataset_mate: lczerolens/lichess-puzzles-mate-in-3
+dataset_non_mate: lczerolens/tcec-boards
+n_mate_binary: 512
+n_non_mate: 512
+n_mate_move_train: 4096
+n_mate_move_test: 512
+probe_epochs: 20
+probe_batch_size: 64
+estimator: linear
+filter_failed_only: false
+move_probe_mode: full
+rotate_moves: true

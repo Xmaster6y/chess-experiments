@@ -1,0 +1,9 @@
+defaults:
+  - base
+
+model_ids:
+  - lczerolens/maia-1100
+  - lczerolens/maia-1500
+n_samples: 256
+n_test: 64
+probe_epochs: 20

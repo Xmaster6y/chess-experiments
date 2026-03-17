@@ -1,3 +1,21 @@
 \section{Introduction}
 
-A simple introduction to the paper, with some references \cite{Shapley1988AVF}.
+Chess is one of the very first domains where superhuman AI shined, first with DeepBlue \cite{campbell2002deep} and more recently with Stockfish \cite{nasu2018nnue} and AlphaZero \cite{silver2018general}. While the design of these superhuman programs is intended to gain performances, e.g. by optimising the tree search, the node evaluation or the training procedure, a lot remains to be done to understand the intrinsic processes that led to these performances truly. In this respect, the first component to decipher is thus the DNN heuristic that guides the tree search. While DNNs are often thought of as black-box systems, they learn a basic linear representation of features. During the last decade, arguments to support this hypothesis has been demonstrated repeatedly for language models \cite{Mikolov2013LinguisticRI, Burns2022DiscoveringLK,Tigges2023LinearRO} but also vision models \cite{Radford2015UnsupervisedRL,Kim2017InterpretabilityBF,Trager2023LinearSO} and others \cite{Nanda2023EmergentLR,Rajendran2024LearningIC}. This strong hypothesis also transferred to chess \cite{McGrath2022Acquisition}, showing that traditional concepts like "attacks" or "material advantage" were linearly represented in the latent representation of the model.
+
+
+ In this work, we focus on the open-source version of Alpha Zero, Leela Chess Zero \cite{pascutto2019leela}, interpreting the neural network heuristic in combination with the tree search algorithm. In particular, we extend the dynamic concepts introduced in \cite{schut2023bridging}.
+We state our contributions as follows:
+\begin{itemize}
+    \item Library\footnote{
+Released at \href{https://github.com/Xmaster6y/lczerolens}{https://github.com/Xmaster6y/lczerolens}.
+}
+    to easily run interpretability methods on Leela Chess Zero networks
+    \item New dictionary architecture to encourage the discovery of differentiating features between latent representations
+    \item Automated sanity checks to ensure the relevance of our dictionaries
+    \item Discovery and interpretation of new strategic concepts creating a feature taxonomy
+\end{itemize}
+
+With this report, we release the code\footnote{
+% Released upon publication.
+Released at \href{https://github.com/Xmaster6y/lczero-planning}{https://github.com/Xmaster6y/lczero-planning}.
+} used to create the datasets and to discover and analyse concepts.

@@ -1,0 +1,82 @@
+\section{Ideas}
+
+\paragraph{Preamble}
+\begin{itemize}
+    \item Compare model playing with Qvalues vs Node visits.
+\end{itemize}
+
+
+\paragraph{Explantions considered}
+\begin{itemize}
+    \item Heatmap over the pieces
+    \item Reduced tree game
+\end{itemize}
+
+\paragraph{How to evaluate the explanations}
+\begin{itemize}
+    \item Move change under irrelevant pieces removal. (Lower is better)
+    \item Value conservation under irrelevant pieces removal. (Lower is better)
+    \item Move change under irrelevant nodes pruning. (Lower is better)
+    \item Explanation change under irrelevant pieces removal. (Lower is better)
+    \item Explanation change under irrelevant nodes pruning. (Lower is better)
+    \item LLM predict next moves given an explanation. (Higher is better) -> Especially on puzzles.
+\end{itemize}
+
+
+\paragraph{Interp baselines}
+\begin{itemize}
+    \item Prune random nodes
+    \item Remove random pieces
+\end{itemize}
+
+\paragraph{Getting tree explanations}
+\begin{itemize}
+    \item Filter nodes on the qvalues
+    \item Filter nodes on the node visits
+    \item Filter nodes on the PUCT scores
+    \item Filter nodes on NRP
+\end{itemize}
+
+\paragraph{Getting heatmaps explanations}
+\begin{itemize}
+    \item LRP on Qvalues -> hard to scale
+    \item LRP on filtered Qvalues
+    \item +- heatmaps
+\end{itemize}
+
+\paragraph{Models to interpret}
+\begin{itemize}
+    \item Random baseline with MCTS
+    \item Material advantage with MCTS
+    \item Leela model with/without MCTS
+    \item Maia model with/without MCTS
+\end{itemize}
+
+
+\paragraph{Contrastivity}
+\begin{itemize}
+    \item Consider why best vs second best
+    \item Minimal change to chose second best instead of best
+    \item Prune nodes to get second best
+    \item Remove pieces to get second best
+\end{itemize}
+
+
+\paragraph{Papers}
+\begin{itemize}
+    \item https://ir.cwi.nl/pub/30850/30850.pdf
+    \item https://arxiv.org/pdf/2505.00610
+    \item https://arxiv.org/pdf/2506.13223
+    \item https://cris.maastrichtuniversity.nl/ws/portalfiles/portal/185395351/Winands-2023-Explainable-Search-An\_Exploratory-Study.pdf
+    \item https://arxiv.org/pdf/2103.01378
+    \item https://arxiv.org/pdf/2504.13151
+\end{itemize}
+
+We want to find the minimal set of pieces that are needed to explain the move choice. -> minimal sufficient explanation.
+
+Impact of the heuristic strength on the explanation.
+
+
+Chess for evaluating saliency map methods.
+
+Leela can distinguish chess playing styles.
