@@ -8,3 +8,17 @@
 - Probe the mate for randomised models.
 - Predict the best move (with or without decomposing the move)
 - Predict the board move squares
+
+\subsection{Mate-in-1 Probing}
+\paragraph{Research question} Do maia networks know they play bad, like do they know when they are doing blunders and do they know the best move?
+
+\paragraph{Method} We look at a mate in 1 dataset. On this dataset, we perform a linear probing on the model. We probe the model on the binary classification task (is it mate in 1?) and the exact move task (what is the best move?). We use double linear probing (predicting the start / end squares) to decompose the move prediction task into two separate tasks.
+The evaluation should also be done on a randomised model.
+
+\paragraph{Results} The binary classification is clear, the model know when a position is a mate in 1 even on the failed puzzles. The results also indicate that the move can be predicted confidently.
+
+\subsubsection{Localised Probing}
+\paragraph{Research question}
+Can we localise precisely where the best move knowledge is located?
+\paragraph{Method}
+train one probe per layer, maybe also only use one square as input for the probe, maybe average / maxpool over the squares.
