@@ -2,4 +2,4 @@ defaults:
   - base
 
 move_probe_mode: double
-estimator: sklearn
+filter_failed_only: true

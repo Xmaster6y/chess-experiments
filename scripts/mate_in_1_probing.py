@@ -33,11 +33,12 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
     rng = np.random.default_rng(seed)
     torch.manual_seed(seed)
 
-    n_mate_total = max(
+    n_mate_needed = max(
         n_mate_binary + n_test_mate_binary,
         n_mate_move_train + n_mate_move_test,
     )
-    mate_samples = datasets.load_mate_in_one_puzzles(dataset_mate, n_mate_total, seed)
+    n_mate_load = n_mate_needed * 10 if filter_failed_only else n_mate_needed
+    mate_samples = datasets.load_mate_in_one_puzzles(dataset_mate, n_mate_load, seed)
 
     if filter_failed_only and mate_samples:
         model_temp = models.load_model(model_id)
@@ -62,8 +63,12 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
         datasets.MateInOneSample(board=b, is_mate_in_one=False, move_idx=None) for b in non_mate_boards
     ]
 
-    train_mate_binary = mate_samples[:n_mate_binary]
-    test_mate_binary = mate_samples[n_mate_binary : n_mate_binary + n_test_mate_binary]
+    # Take what's needed from filtered mate samples
+    n_mate_avail = len(mate_samples)
+    n_move_total = n_mate_move_train + n_mate_move_test
+
+    train_mate_binary = mate_samples[: min(n_mate_binary, n_mate_avail)]
+    test_mate_binary = mate_samples[n_mate_binary : min(n_mate_binary + n_test_mate_binary, n_mate_avail)]
     train_non_mate = non_mate_samples[:n_non_mate]
     test_non_mate = non_mate_samples[n_non_mate : n_non_mate + n_test_non_mate]
     train_samples_binary = train_mate_binary + train_non_mate
@@ -71,8 +76,18 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
     rng.shuffle(train_samples_binary)
     rng.shuffle(test_samples_binary)
 
-    train_mate_move = mate_samples[:n_mate_move_train]
-    test_mate_move = mate_samples[n_mate_move_train : n_mate_move_train + n_mate_move_test]
+    if n_mate_avail >= n_move_total:
+        train_mate_move = mate_samples[:n_mate_move_train]
+        test_mate_move = mate_samples[n_mate_move_train : n_mate_move_train + n_mate_move_test]
+    else:
+        ratio = n_mate_move_train / n_move_total
+        n_train = max(1, int(n_mate_avail * ratio))
+        n_test = n_mate_avail - n_train
+        if n_test == 0 and n_mate_avail >= 2:
+            n_train -= 1
+            n_test = 1
+        train_mate_move = mate_samples[:n_train]
+        test_mate_move = mate_samples[n_train : n_train + n_test]
 
     logger.info(f"Binary probe: train={len(train_samples_binary)}, test={len(test_samples_binary)}")
     logger.info(f"Move probe: train={len(train_mate_move)}, test={len(test_mate_move)}")

@@ -1,0 +1,15 @@
+\section{Experiments}
+
+\subsection{Probing Tasks}
+\paragraph{Move Probing}
+- Predict the best move (with or without decomposing the move)
+\paragraph{Board Probing}
+- Predict the board move squares (squares involved in the move)
+
+
+\subsection{Saliency Map Evaluation}
+\paragraph{Counterfactuals}
+- Change the input board randomly
+- Change the input board using contrastive counterfactuals (legal moves)
+\paragraph{Prediction Recovery}
+- Train a model to recover the prediction from the saliency map (similar to user study)

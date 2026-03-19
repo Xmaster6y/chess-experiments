@@ -69,9 +69,9 @@ def extract_layer_accuracies(metrics: dict, key: str = "acc") -> dict[str, float
     return dict(sorted(out.items(), key=lambda x: int(x[0].replace("block", ""))))
 
 
-def _compute_accuracy(predictions: torch.Tensor, labels: torch.Tensor) -> dict:
-    preds = predictions.cpu().numpy() if predictions.is_cuda else predictions.numpy()
-    labs = labels.cpu().numpy() if labels.is_cuda else labels.numpy()
+def _compute_accuracy(predictions: torch.Tensor | np.ndarray, labels: torch.Tensor | np.ndarray) -> dict:
+    preds = predictions.cpu().numpy() if hasattr(predictions, "cpu") else np.asarray(predictions)
+    labs = labels.cpu().numpy() if hasattr(labels, "cpu") else np.asarray(labels)
     acc = (preds == labs).mean()
     return {"acc": float(acc)}
 

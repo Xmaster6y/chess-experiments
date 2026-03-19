@@ -19,6 +19,7 @@ uv run -m scripts.run_experiment -m puzzle_stats=??? \
 ```
 """
 
+import logging
 from loguru import logger
 import hydra
 from hydra.core.hydra_config import HydraConfig
@@ -37,6 +38,9 @@ SCRIPTS = {
     "cross_model_probing": run_cross_model_probing,
     "piece_pruning": run_piece_pruning,
 }
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
 
 @hydra.main(config_path="../configs", config_name="run_experiment.yaml", version_base=None)

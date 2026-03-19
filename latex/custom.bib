@@ -1,8 +1,32 @@
-%% Custom entries
+@inproceedings{McIlroy-Young2020AligningSA,
+author = {McIlroy-Young, Reid and Sen, Siddhartha and Kleinberg, Jon and Anderson, Ashton},
+title = {Aligning Superhuman AI with Human Behavior: Chess as a Model System},
+year = {2020},
+isbn = {9781450379984},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3394486.3403219},
+doi = {10.1145/3394486.3403219},
+abstract = {As artificial intelligence becomes increasingly intelligent---in some cases, achieving superhuman performance---there is growing potential for humans to learn from and collaborate with algorithms. However, the ways in which AI systems approach problems are often different from the ways people do, and thus may be uninterpretable and hard to learn from. A crucial step in bridging this gap between human and artificial intelligence is modeling the granular actions that constitute human behavior, rather than simply matching aggregate human performance. We pursue this goal in a model system with a long history in artificial intelligence: chess. The aggregate performance of a chess player unfolds as they make decisions over the course of a game. The hundreds of millions of games played online by players at every skill level form a rich source of data in which these decisions, and their exact context, are recorded in minute detail. Applying existing chess engines to this data, including an open-source implementation of AlphaZero, we find that they do not predict human moves well. We develop and introduce Maia, a customized version of AlphaZero trained on human chess games, that predicts human moves at a much higher accuracy than existing engines, and can achieve maximum accuracy when predicting decisions made by players at a specific skill level in a tuneable way. For a dual task of predicting whether a human will make a large mistake on the next move, we develop a deep neural network that significantly outperforms competitive baselines. Taken together, our results suggest that there is substantial promise in designing artificial intelligence systems with human collaboration in mind by first accurately modeling granular human decision-making.},
+booktitle = {Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery \& Data Mining},
+pages = {1677–1687},
+numpages = {11},
+keywords = {action prediction, chess, human-ai collaboration},
+location = {Virtual Event, CA, USA},
+series = {KDD '20}
+}
 
-@inproceedings{Shapley1988AVF,
-  title={A Value for n-person Games},
-  author={Lloyd S. Shapley},
-  year={1988},
-  url={https://api.semanticscholar.org/CorpusID:153629957}
+@inproceedings{Tang2024Maia-2,
+author = {Tang, Zhenwei and Jiao, Difan and McIlroy-Young, Reid and Kleinberg, Jon and Sen, Siddhartha and Anderson, Ashton},
+title = {Maia-2: a unified model for human-AI alignment in chess},
+year = {2024},
+isbn = {9798331314385},
+publisher = {Curran Associates Inc.},
+address = {Red Hook, NY, USA},
+abstract = {There are an increasing number of domains in which artificial intelligence (AI) systems both surpass human ability and accurately model human behavior. This introduces the possibility of algorithmically-informed teaching in these domains through more relatable AI partners and deeper insights into human decision-making. Critical to achieving this goal, however, is coherently modeling human behavior at various skill levels. Chess is an ideal model system for conducting research into this kind of human-AI alignment, with its rich history as a pivotal testbed for AI research, mature superhuman AI systems like AlphaZero, and precise measurements of skill via chess rating systems. Previous work in modeling human decision-making in chess uses completely independent models to capture human style at different skill levels, meaning they lack coherence in their ability to adapt to the full spectrum of human improvement and are ultimately limited in their effectiveness as AI partners and teaching tools. In this work, we propose a unified modeling approach for human-AI alignment in chess that coherently captures human style across different skill levels and directly captures how people improve. Recognizing the complex, non-linear nature of human learning, we introduce a skill-aware attention mechanism to dynamically integrate players' strengths with encoded chess positions, enabling our model to be sensitive to evolving player skill. Our experimental results demonstrate that this unified framework significantly enhances the alignment between AI and human players across a diverse range of expertise levels, paving the way for deeper insights into human decision-making and AI-guided teaching tools. Our implementation is available https://github.com/CSSLab/maia2.},
+booktitle = {Proceedings of the 38th International Conference on Neural Information Processing Systems},
+articleno = {659},
+numpages = {26},
+location = {Vancouver, BC, Canada},
+series = {NIPS '24}
 }
