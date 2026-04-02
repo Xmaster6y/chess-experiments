@@ -1,0 +1,9 @@
+defaults:
+  - base
+  - /probing/mate_move_by_layer_sharing
+  - /probe/small_batch
+
+n_mate_binary: 64
+n_non_mate: 64
+n_mate_move_train: 128
+n_mate_move_test: 32

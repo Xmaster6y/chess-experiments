@@ -2,4 +2,5 @@ defaults:
   - base
 
 move_probe_mode: double
-estimator: sklearn
+probe:
+  estimator: sklearn

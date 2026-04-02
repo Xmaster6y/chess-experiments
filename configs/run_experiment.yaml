@@ -1,5 +1,6 @@
 defaults:
   - optional puzzle_stats: null
+  - optional active_squares_probing: null
   - optional mate_in_1_probing: null
   - optional mate_in_3_probing: null
   - optional cross_model_probing: null

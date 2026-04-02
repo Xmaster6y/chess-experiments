@@ -10,12 +10,14 @@ from omegaconf import DictConfig
 from tensordict import TensorDict
 
 from chess_experiments import datasets, models, probing
+from chess_experiments.probing_validate import probe_field, validate_mate_probe_task
 
 
 def main(cfg: DictConfig, *, save_dir: str | None = None):
     c = cfg.mate_in_3_probing
+    validate_mate_probe_task(c)
     seed = c.get("seed", 42)
-    model_id = c.model
+    model_id = probe_field(c, "model")
     dataset_mate = c.dataset_mate
     dataset_non_mate = c.dataset_non_mate
     n_mate_binary = c.n_mate_binary
@@ -24,9 +26,11 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
     n_test_non_mate = c.get("n_test_non_mate", n_non_mate // 4)
     n_mate_move_train = c.n_mate_move_train
     n_mate_move_test = c.n_mate_move_test
-    probe_epochs = c.get("probe_epochs", 20)
-    probe_batch_size = c.get("probe_batch_size", 64)
-    estimator = c.get("estimator", "linear")
+    probe_epochs = probe_field(c, "probe_epochs")
+    probe_batch_size = probe_field(c, "probe_batch_size")
+    estimator = probe_field(c, "estimator")
+    probe_field(c, "prediction_mode")
+    probe_field(c, "activation_batch_size")
     filter_failed_only = c.get("filter_failed_only", False)
     move_probe_mode = c.get("move_probe_mode", "full")
     rotate_moves = c.get("rotate_moves", True)

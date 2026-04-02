@@ -6,15 +6,24 @@ from pathlib import Path
 import numpy as np
 import torch
 from loguru import logger
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from chess_experiments import datasets, models, probing
+from chess_experiments.layout_probing import (
+    PredictionMode,
+    ProbeLayout,
+    macro_mean_metric,
+    resolve_probing_block,
+    run_probing_layout,
+)
+from chess_experiments.probing_validate import probe_field, validate_mate_probe_task
 
 
 def main(cfg: DictConfig, *, save_dir: str | None = None):
     c = cfg.mate_in_1_probing
+    validate_mate_probe_task(c)
     seed = c.get("seed", 42)
-    model_id = c.model
+    model_id = probe_field(c, "model")
     dataset_mate = c.dataset_mate
     dataset_non_mate = c.dataset_non_mate
     n_mate_binary = c.n_mate_binary
@@ -23,12 +32,15 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
     n_test_non_mate = c.get("n_test_non_mate", n_non_mate // 4)
     n_mate_move_train = c.n_mate_move_train
     n_mate_move_test = c.n_mate_move_test
-    probe_epochs = c.get("probe_epochs", 20)
-    probe_batch_size = c.get("probe_batch_size", 64)
-    estimator = c.get("estimator", "linear")
+    probe_epochs = probe_field(c, "probe_epochs")
+    probe_batch_size = probe_field(c, "probe_batch_size")
+    estimator = probe_field(c, "estimator")
+    pred_mode = PredictionMode(str(probe_field(c, "prediction_mode")))
+    activation_batch_size = int(probe_field(c, "activation_batch_size"))
     filter_failed_only = c.get("filter_failed_only", False)
     move_probe_mode = c.get("move_probe_mode", "full")
     rotate_moves = c.get("rotate_moves", True)
+    layout_modes, (share_sq, share_la) = resolve_probing_block(c)
 
     rng = np.random.default_rng(seed)
     torch.manual_seed(seed)
@@ -63,7 +75,6 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
         datasets.MateInOneSample(board=b, is_mate_in_one=False, move_idx=None) for b in non_mate_boards
     ]
 
-    # Take what's needed from filtered mate samples
     n_mate_avail = len(mate_samples)
     n_move_total = n_mate_move_train + n_mate_move_test
 
@@ -204,6 +215,70 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
             json.dumps(probing.extract_layer_accuracies(results_to), indent=2),
             encoding="utf-8",
         )
+
+    if layout_modes and train_mate_move and test_mate_move:
+
+        def _mate_move_square_labels_64(samples: list) -> torch.Tensor:
+            """Binary per square: from/to squares of the dataset mating move."""
+            y = torch.zeros(len(samples), 64, dtype=torch.long)
+            for i, s in enumerate(samples):
+                if s.move_idx is None:
+                    continue
+                f_sq, t_sq = probing.move_idx_to_squares(
+                    s.move_idx,
+                    s.board if not rotate_moves else None,
+                    rotate_moves,
+                )
+                y[i, f_sq] = 1
+                y[i, t_sq] = 1
+            return y
+
+        train_y_sp = _mate_move_square_labels_64(train_mate_move)
+        test_y_sp = _mate_move_square_labels_64(test_mate_move)
+
+        layout_summaries = []
+        for mode_str in layout_modes:
+            mode = ProbeLayout(mode_str)
+            logger.info(
+                f"Mate-move layout probe: layout={mode.value} "
+                f"probe_sharing={OmegaConf.select(c, 'probing.probe_sharing')}"
+            )
+            res = run_probing_layout(
+                model=model,
+                train_boards=train_mate_move,
+                test_boards=test_mate_move,
+                train_labels=train_y_sp,
+                test_labels=test_y_sp,
+                layout_mode=mode,
+                prediction_mode=pred_mode,
+                num_classes=2,
+                share_across_squares=share_sq,
+                share_across_layers=share_la,
+                activation_batch_size=activation_batch_size,
+                probe_epochs=probe_epochs,
+                probe_batch_size=probe_batch_size,
+                estimator=estimator,
+            )
+            per_probe = res["per_probe"]
+            summary = {
+                "task": "mate_move_squares",
+                "layout_mode": res["layout_mode"],
+                "prediction_mode": res["prediction_mode"],
+                "share_across_squares": res.get("share_across_squares"),
+                "share_across_layers": res.get("share_across_layers"),
+                "n_probes": len(per_probe),
+                "macro_mean_acc": macro_mean_metric(per_probe, "acc"),
+                "macro_mean_f1": macro_mean_metric(per_probe, "f1"),
+            }
+            if len(per_probe) <= 128:
+                summary["per_probe"] = per_probe
+            layout_summaries.append(summary)
+
+        (save_dir / "mate_move_layout_probe.json").write_text(
+            json.dumps(layout_summaries, indent=2),
+            encoding="utf-8",
+        )
+        logger.info("Mate-move layout probing complete.")
 
     del model
     if torch.cuda.is_available():

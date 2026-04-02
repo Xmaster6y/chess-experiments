@@ -8,6 +8,7 @@ uv run -m scripts.run_experiment puzzle_stats=base
 uv run -m scripts.run_experiment mate_in_1_probing=base
 uv run -m scripts.run_experiment mate_in_3_probing=base
 uv run -m scripts.run_experiment piece_pruning=base
+uv run -m scripts.run_experiment active_squares_probing=quick
 ```
 
 By default, no script runs. Sweep with:
@@ -25,6 +26,7 @@ import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 
+from scripts.active_squares_probing import main as run_active_squares_probing
 from scripts.cross_model_probing import main as run_cross_model_probing
 from scripts.mate_in_1_probing import main as run_mate_in_1_probing
 from scripts.mate_in_3_probing import main as run_mate_in_3_probing
@@ -33,6 +35,7 @@ from scripts.puzzle_stats import main as run_puzzle_stats
 
 SCRIPTS = {
     "puzzle_stats": run_puzzle_stats,
+    "active_squares_probing": run_active_squares_probing,
     "mate_in_1_probing": run_mate_in_1_probing,
     "mate_in_3_probing": run_mate_in_3_probing,
     "cross_model_probing": run_cross_model_probing,

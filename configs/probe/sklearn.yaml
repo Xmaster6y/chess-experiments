@@ -1,0 +1,6 @@
+model: lczerolens/maia-1100
+probe_epochs: 20
+probe_batch_size: 64
+estimator: sklearn
+prediction_mode: binary
+activation_batch_size: 64

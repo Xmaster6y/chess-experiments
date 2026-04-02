@@ -1,0 +1,4 @@
+modes:
+  - per_layer
+  - per_square
+probe_sharing: []

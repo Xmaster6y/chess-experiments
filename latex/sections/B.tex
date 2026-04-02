@@ -16,3 +16,32 @@
 \paragraph{Activity Decomposition}
 - In term of activity
 - Check the impact of mine vs theirs
+
+
+\begin{align*}
+    V &= w - l \\
+        &= \frac{e^{z_w} - e^{z_l}}{e^{z_w} + e^{z_d} + e^{z_l}} \\
+        &= \frac{A}{B}
+\end{align*}
+
+\begin{align*}
+    \partial_x A &= e^{z_w} \partial_x z_w  - e^{z_l} \partial_x z_l
+\end{align*}
+
+\begin{align*}
+    \partial_x B &= e^{z_w} \partial_x z_w + e^{z_d} \partial_x z_d + e^{z_l} \partial_x z_l
+\end{align*}
+
+\begin{align*}
+    \partial_x V &= \frac{B\partial_x A - A \partial_x B}{B^2} \\
+    &= \frac{\partial_x A }{B}-\frac{A}{B}\cdot\frac{\partial_x B}{B} \\
+    &= w\partial_x z_w  - l\partial_x z_l -V\cdot
+    (w \partial_x z_w + d \partial_x z_d + l \partial_x z_l) \\
+    &= w(1-V) \partial_x z_w - dV \partial_x z_d - l (1+V) \partial_x z_l \\
+\end{align*}
+
+
+Better fit to attn lrp:
+\begin{align*}
+    R_i^{l-1} &= x_i(R_i^l-s_i\sum_j R_j^l)
+\end{align*}

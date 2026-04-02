@@ -1,16 +1,14 @@
 defaults:
+  - /probing/no_layout
+  - /probe/linear_binary_64
   - _self_
 
-model: lczerolens/maia-1100
 dataset_mate: lczerolens/lichess-puzzles-mate-in-1
 dataset_non_mate: lczerolens/tcec-boards
 n_mate_binary: 500
 n_non_mate: 500
 n_mate_move_train: 6000
 n_mate_move_test: 500
-probe_epochs: 20
-probe_batch_size: 64
-estimator: linear
 filter_failed_only: false
 move_probe_mode: full
 rotate_moves: true

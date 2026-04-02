@@ -1,0 +1,17 @@
+defaults:
+  - /probing/no_layout
+  - /probe/linear_binary_64
+  - sampling: perplexity_pruned
+  - _self_
+
+dataset: lczerolens/tcec-boards
+n_roots_train: 200
+n_roots_test: 50
+height: 3
+max_paths_per_root: 64
+max_nodes_total: 20000
+branching: perplexity
+fixed_k: null
+seed: 42
+temp_base: 1.0
+temp_end: 2.0

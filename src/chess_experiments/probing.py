@@ -1,16 +1,17 @@
 """Probing infrastructure for linear probes on model activations."""
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import chess
 import numpy as np
 import torch
 from tensordict import TensorDict
-from tdhook.latent import Probing
-from tdhook.latent.probing import LinearEstimator, ProbeManager
 
-from scripts.constants import D_LATENT, SEED
+from chess_experiments.activations import collect_backbone_activations
+from chess_experiments.probe_training import run_per_layer_probes_for_squares, run_per_layer_sklearn_probes
+
+from scripts.constants import BACKBONE_PATTERN, D_LATENT
 
 if TYPE_CHECKING:
     from lczerolens import LczeroBoard, LczeroModel
@@ -58,15 +59,90 @@ def move_idx_to_squares(
     return move.from_square, move.to_square
 
 
-def extract_layer_accuracies(metrics: dict, key: str = "acc") -> dict[str, float]:
-    """Extract accuracy per layer from probe metrics. Returns dict layer_name -> acc."""
+def run_probing_64_binary_squares(
+    model: "LczeroModel",
+    train_boards: list,
+    test_boards: list,
+    train_labels_64: torch.Tensor,
+    test_labels_64: torch.Tensor,
+    backbone_pattern: str | None = None,
+    d_latent: int = D_LATENT,
+    probe_epochs: int = 20,
+    probe_batch_size: int = 64,
+    estimator: str = "linear",
+) -> dict:
+    """64 binary probes (one per square); single activation cache, sklearn per layer."""
+    assert train_labels_64.shape[-1] == 64 and test_labels_64.shape[-1] == 64
+    del d_latent
+    _ = probe_epochs
+    if estimator not in ("linear", "sklearn"):
+        raise ValueError(f"estimator must be 'linear' or 'sklearn' (sklearn LogisticRegression); got {estimator!r}")
+
+    pattern = backbone_pattern or BACKBONE_PATTERN
+    layer_keys, train_act = collect_backbone_activations(
+        model, train_boards, backbone_pattern=pattern, batch_size=probe_batch_size
+    )
+    _, test_act = collect_backbone_activations(
+        model, test_boards, backbone_pattern=pattern, batch_size=probe_batch_size
+    )
+
+    per_square_metrics = run_per_layer_probes_for_squares(
+        layer_keys,
+        train_act,
+        test_act,
+        train_labels_64,
+        test_labels_64,
+        compute_metrics=_compute_binary_acc_f1,
+    )
+
+    layer_names = list(extract_layer_metric(per_square_metrics[0], "acc").keys())
+    macro_mean_acc_by_layer = _macro_mean_metric_by_layer(per_square_metrics, layer_names, "acc")
+    macro_mean_f1_by_layer = _macro_mean_metric_by_layer(per_square_metrics, layer_names, "f1")
+
+    return {
+        "per_square": per_square_metrics,
+        "macro_mean_acc_by_layer": macro_mean_acc_by_layer,
+        "macro_mean_f1_by_layer": macro_mean_f1_by_layer,
+    }
+
+
+def extract_layer_metric(metrics: dict, key: str) -> dict[str, float]:
+    """Extract one metric per layer from probe metrics (e.g. acc or f1)."""
     out = {}
     for k, val in metrics.items():
         if isinstance(val, dict) and key in val:
             m = re.search(r"block(\d+)", k)
             if m:
-                out[f"block{m.group(1)}"] = val[key]
+                v = val[key]
+                if isinstance(v, (int, float)) and not (isinstance(v, float) and np.isnan(v)):
+                    out[f"block{m.group(1)}"] = float(v)
     return dict(sorted(out.items(), key=lambda x: int(x[0].replace("block", ""))))
+
+
+def extract_layer_accuracies(metrics: dict, key: str = "acc") -> dict[str, float]:
+    """Extract accuracy per layer from probe metrics. Returns dict layer_name -> acc."""
+    return extract_layer_metric(metrics, key)
+
+
+def _macro_mean_metric_by_layer(
+    per_square_metrics: list[dict],
+    layer_names: list[str],
+    metric_key: str,
+) -> dict[str, float]:
+    """Mean over squares per layer; ignores NaN (e.g. undefined F1 when test labels are one class)."""
+    macro: dict[str, float] = {}
+    for layer in layer_names:
+        vals: list[float] = []
+        for sqm in per_square_metrics:
+            by_block = extract_layer_metric(sqm, metric_key)
+            if layer not in by_block:
+                continue
+            v = by_block[layer]
+            if not np.isnan(v):
+                vals.append(v)
+        if vals:
+            macro[layer] = float(np.mean(vals))
+    return macro
 
 
 def _compute_accuracy(predictions: torch.Tensor | np.ndarray, labels: torch.Tensor | np.ndarray) -> dict:
@@ -76,28 +152,20 @@ def _compute_accuracy(predictions: torch.Tensor | np.ndarray, labels: torch.Tens
     return {"acc": float(acc)}
 
 
-class SklearnLinearProbe:
-    """sklearn LogisticRegression wrapper for tdhook Probing (handles tensor -> numpy)."""
+def _compute_binary_acc_f1(predictions: torch.Tensor | np.ndarray, labels: torch.Tensor | np.ndarray) -> dict:
+    """Accuracy and binary F1 (positive class = 1, touched); F1 is NaN if test labels are single-class."""
+    from sklearn.metrics import f1_score
 
-    def __init__(self, d_latent: int, num_classes: int, **kwargs):
-        from sklearn.linear_model import LogisticRegression
-
-        self.clf = LogisticRegression(
-            max_iter=500,
-            solver="lbfgs",
-            random_state=SEED,
-            **kwargs,
-        )
-
-    def fit(self, X, y=None):
-        X_np = X.detach().cpu().numpy() if hasattr(X, "detach") else np.asarray(X)
-        y_np = y.cpu().numpy() if hasattr(y, "cpu") else np.asarray(y)
-        self.clf.fit(X_np, y_np)
-        return self
-
-    def predict(self, X):
-        X_np = X.detach().cpu().numpy() if hasattr(X, "detach") else np.asarray(X)
-        return self.clf.predict(X_np)
+    preds = predictions.cpu().numpy() if hasattr(predictions, "cpu") else np.asarray(predictions)
+    labs = labels.cpu().numpy() if hasattr(labels, "cpu") else np.asarray(labels)
+    preds = preds.astype(np.int64, copy=False).ravel()
+    labs = labs.astype(np.int64, copy=False).ravel()
+    acc = float((preds == labs).mean())
+    if np.unique(labs).size < 2:
+        f1 = float("nan")
+    else:
+        f1 = float(f1_score(labs, preds, average="binary", pos_label=1, zero_division=0))
+    return {"acc": acc, "f1": f1}
 
 
 def run_probing(
@@ -112,69 +180,39 @@ def run_probing(
     probe_epochs: int = 20,
     probe_batch_size: int = 64,
     estimator: str = "linear",
+    compute_metrics: Callable[..., dict] | None = None,
+    activation_batch_size: int | None = None,
 ) -> dict:
-    """Run probing on backbone layers. Returns metrics per layer.
+    """Per-layer probes on cached backbone activations (sklearn on flattened [C*H*W]).
 
-    train_boards/test_boards: list of objects with .board attr, or list of LczeroBoard.
-    estimator: 'linear' (tdhook LinearEstimator) or 'sklearn' (LogisticRegression).
+    Boards: objects with ``.board`` or raw boards. ``probe_epochs`` is unused (sklearn).
+    ``compute_metrics``: optional ``(preds, labels) -> dict``; default is accuracy only.
     """
-    from scripts.constants import BACKBONE_PATTERN
+    del d_latent
+    _ = probe_epochs
+    if estimator not in ("linear", "sklearn"):
+        raise ValueError(f"estimator must be 'linear' or 'sklearn'; got {estimator!r}")
 
     pattern = backbone_pattern or BACKBONE_PATTERN
+    act_bs = activation_batch_size if activation_batch_size is not None else probe_batch_size
 
-    if estimator == "sklearn":
-        estimator_class = SklearnLinearProbe
-        estimator_kwargs = {"d_latent": d_latent, "num_classes": num_classes}
-    else:
-        estimator_class = LinearEstimator
-        estimator_kwargs = {
-            "d_latent": d_latent,
-            "num_classes": num_classes,
-            "epochs": probe_epochs,
-            "batch_size": probe_batch_size,
-            "verbose": False,
-        }
-
-    probe_manager = ProbeManager(
-        estimator_class=estimator_class,
-        estimator_kwargs=estimator_kwargs,
-        compute_metrics=_compute_accuracy,
-        allow_overwrite=True,
+    layer_keys, train_act = collect_backbone_activations(
+        model, train_boards, backbone_pattern=pattern, batch_size=act_bs
     )
+    _, test_act = collect_backbone_activations(model, test_boards, backbone_pattern=pattern, batch_size=act_bs)
 
-    def _get_board(obj):
-        return obj.board if hasattr(obj, "board") else obj
+    if compute_metrics is None:
+        compute_metrics = _compute_accuracy
 
-    board_train = model.prepare_boards(*[_get_board(b) for b in train_boards])
-    board_test = model.prepare_boards(*[_get_board(b) for b in test_boards])
-
-    with Probing(
-        pattern,
-        probe_manager.probe_factory,
-        additional_keys=["labels", "step_type"],
-    ).prepare(model) as hooked_model:
-        train_td = TensorDict(
-            {
-                "board": board_train,
-                "labels": train_labels,
-                "step_type": "fit",
-            },
-            batch_size=len(train_boards),
-        )
-        hooked_model(train_td)
-
-        with torch.no_grad():
-            test_td = TensorDict(
-                {
-                    "board": board_test,
-                    "labels": test_labels,
-                    "step_type": "predict",
-                },
-                batch_size=len(test_boards),
-            )
-            hooked_model(test_td)
-
-    return probe_manager.predict_metrics
+    return run_per_layer_sklearn_probes(
+        layer_keys,
+        train_act,
+        test_act,
+        train_labels,
+        test_labels,
+        num_classes=num_classes,
+        compute_metrics=compute_metrics,
+    )
 
 
 def run_cross_model_probing(
@@ -188,14 +226,17 @@ def run_cross_model_probing(
     d_latent: int = D_LATENT,
     probe_epochs: int = 20,
     probe_batch_size: int = 64,
+    activation_batch_size: int | None = None,
 ) -> dict:
-    """Run probing: source latents -> target move labels. Returns metrics per layer.
+    """Source activations, target policy labels; metrics per layer. ``probe_epochs`` unused.
 
-    label_type: 'absolute' (argmax full policy) or 'legal' (argmax over legal moves).
+    ``label_type``: ``absolute`` or ``legal``.
     """
-    from scripts.constants import BACKBONE_PATTERN
+    del d_latent
+    _ = probe_epochs
 
     pattern = backbone_pattern or BACKBONE_PATTERN
+    act_bs = activation_batch_size if activation_batch_size is not None else probe_batch_size
 
     board_tensor_train = target_model.prepare_boards(*train_boards)
     board_tensor_test = target_model.prepare_boards(*test_boards)
@@ -222,46 +263,17 @@ def run_cross_model_probing(
             device=policy_test.device,
         )
 
-    probe_manager = ProbeManager(
-        estimator_class=LinearEstimator,
-        estimator_kwargs={
-            "d_latent": d_latent,
-            "num_classes": num_classes,
-            "epochs": probe_epochs,
-            "batch_size": probe_batch_size,
-            "verbose": False,
-        },
-        compute_metrics=_compute_accuracy,
-        allow_overwrite=True,
+    layer_keys, train_act = collect_backbone_activations(
+        source_model, train_boards, backbone_pattern=pattern, batch_size=act_bs
     )
+    _, test_act = collect_backbone_activations(source_model, test_boards, backbone_pattern=pattern, batch_size=act_bs)
 
-    board_tensor_train_src = source_model.prepare_boards(*train_boards)
-    board_tensor_test_src = source_model.prepare_boards(*test_boards)
-
-    with Probing(
-        pattern,
-        probe_manager.probe_factory,
-        additional_keys=["labels", "step_type"],
-    ).prepare(source_model) as hooked_model:
-        train_td = TensorDict(
-            {
-                "board": board_tensor_train_src,
-                "labels": labels_train,
-                "step_type": "fit",
-            },
-            batch_size=len(train_boards),
-        )
-        hooked_model(train_td)
-
-        with torch.no_grad():
-            test_td = TensorDict(
-                {
-                    "board": board_tensor_test_src,
-                    "labels": labels_test,
-                    "step_type": "predict",
-                },
-                batch_size=len(test_boards),
-            )
-            hooked_model(test_td)
-
-    return probe_manager.predict_metrics
+    return run_per_layer_sklearn_probes(
+        layer_keys,
+        train_act,
+        test_act,
+        labels_train,
+        labels_test,
+        num_classes=num_classes,
+        compute_metrics=_compute_accuracy,
+    )
