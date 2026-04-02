@@ -1,0 +1,12 @@
+defaults:
+  - /_layout_probe@layout_probe: per_layer
+  - /_probe_train@probe_train: sklearn
+  - _self_
+
+model: lczerolens/maia-1100
+report_metric: f1
+dataset_mate: lczerolens/lichess-puzzles-mate-in-1
+n_mate_train: 6000
+n_mate_test: 500
+filter_failed_only: false
+input_encoding: INPUT_CLASSICAL_112_PLANE_NO_HISTORY_ZEROS

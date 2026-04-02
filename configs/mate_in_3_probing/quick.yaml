@@ -5,5 +5,5 @@ n_mate_binary: 128
 n_non_mate: 128
 n_mate_move_train: 512
 n_mate_move_test: 128
-probe:
-  probe_epochs: 10
+probe_train:
+  epochs: 10

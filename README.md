@@ -47,3 +47,27 @@ Also see the hydra configs based on `submitit` in the [`configs/hydra/launcher/`
 ## Commands
 
 Repeatable workflows (run from Cursor command palette or chat): **project-setup**, **literature-review**, **design-experiments**, **write-paper**, **whats-next**, **review-paper**. Definitions live in [`.cursor/commands/`](.cursor/commands/).
+
+## Mate-in-1 probing task runs
+
+Mate-in-1 probing now uses one top-level runnable config per task:
+
+- Binary mate-in-1 classification:
+  - `uv run -m scripts.run_experiment mate_in_1_binary_probing=base`
+- Binary mate-in-1 classification (sklearn estimator):
+  - `uv run -m scripts.run_experiment mate_in_1_binary_probing=sklearn`
+  - default report metric is `f1`; override with `... mate_in_1_binary_probing.report_metric=acc` if needed
+- Best move multiclass prediction:
+  - `uv run -m scripts.run_experiment mate_in_1_move_probing=base`
+- Mate-move active-squares probing (per-layer layout):
+  - `uv run -m scripts.run_experiment mate_in_1_active_squares_probing=base`
+- Mate-move active-squares probing (per-square layout):
+  - `uv run -m scripts.run_experiment mate_in_1_active_squares_probing=per_square`
+
+Shared internal config groups are underscore-prefixed:
+- `configs/_probe_train/`
+- `configs/_layout_probe/`
+
+Design convention:
+- `_layout_probe` defines only representation layout/sharing (never task labels or prediction type), with a single required `mode` (`individual`, `per_layer`, `per_square`).
+- `_probe_train` defines only probe optimizer/training settings (model lives in each task config).

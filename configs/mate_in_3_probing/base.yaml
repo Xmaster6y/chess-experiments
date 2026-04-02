@@ -1,8 +1,11 @@
 defaults:
-  - /probing/no_layout
-  - /probe/linear_binary_64
+  - /_layout_probe@layout_probe: per_layer
+  - /_probe_train@probe_train: linear
   - _self_
 
+model: lczerolens/maia-1100
+report_metric_binary: f1
+report_metric_move: f1
 dataset_mate: lczerolens/lichess-puzzles-mate-in-3
 dataset_non_mate: lczerolens/tcec-boards
 n_mate_binary: 512

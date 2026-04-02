@@ -1,0 +1,8 @@
+defaults:
+  - base
+
+layout_probe:
+  mode: per_square
+  sharing:
+    across_squares: false
+    across_layers: false

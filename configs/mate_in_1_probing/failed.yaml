@@ -1,5 +1,0 @@
-defaults:
-  - base
-
-move_probe_mode: double
-filter_failed_only: true

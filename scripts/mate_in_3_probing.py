@@ -1,23 +1,29 @@
 """Mate-in-3 probing: binary (is it mate in 3?) and exact first-move probes."""
 
-import json
 from pathlib import Path
 
-import numpy as np
 import torch
 from loguru import logger
 from omegaconf import DictConfig
 from tensordict import TensorDict
 
 from chess_experiments import datasets, models, probing
-from chess_experiments.probing_validate import probe_field, validate_mate_probe_task
+from chess_experiments.layout_probing import (
+    PredictionMode,
+    ProbeLayout,
+    resolve_layout_probe_block,
+    run_probing_layout,
+    save_probe_metric_breakdowns,
+)
+from chess_experiments.mate_probing import seed_everything
+from chess_experiments.probing_validate import probe_train_field, validate_mate_in_3_task
 
 
 def main(cfg: DictConfig, *, save_dir: str | None = None):
     c = cfg.mate_in_3_probing
-    validate_mate_probe_task(c)
+    validate_mate_in_3_task(c)
     seed = c.get("seed", 42)
-    model_id = probe_field(c, "model")
+    model_id = c.model
     dataset_mate = c.dataset_mate
     dataset_non_mate = c.dataset_non_mate
     n_mate_binary = c.n_mate_binary
@@ -26,17 +32,18 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
     n_test_non_mate = c.get("n_test_non_mate", n_non_mate // 4)
     n_mate_move_train = c.n_mate_move_train
     n_mate_move_test = c.n_mate_move_test
-    probe_epochs = probe_field(c, "probe_epochs")
-    probe_batch_size = probe_field(c, "probe_batch_size")
-    estimator = probe_field(c, "estimator")
-    probe_field(c, "prediction_mode")
-    probe_field(c, "activation_batch_size")
+    probe_epochs = c.probe_train.get("epochs", 0)
+    probe_batch_size = probe_train_field(c, "batch_size")
+    estimator = probe_train_field(c, "estimator")
+    report_metric_binary = str(c.get("report_metric_binary", "f1"))
+    report_metric_move = str(c.get("report_metric_move", "f1"))
     filter_failed_only = c.get("filter_failed_only", False)
     move_probe_mode = c.get("move_probe_mode", "full")
     rotate_moves = c.get("rotate_moves", True)
+    layout_mode_str, (share_sq, share_la) = resolve_layout_probe_block(c)
+    layout_mode = ProbeLayout(layout_mode_str)
 
-    rng = np.random.default_rng(seed)
-    torch.manual_seed(seed)
+    rng = seed_everything(seed)
 
     n_mate_total = max(
         n_mate_binary + n_test_mate_binary,
@@ -90,106 +97,134 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
         [1 if s.is_mate else 0 for s in test_samples_binary],
         dtype=torch.long,
     )
-    results_binary = probing.run_probing(
+    results_binary = run_probing_layout(
         model=model,
         train_boards=train_samples_binary,
         test_boards=test_samples_binary,
         train_labels=train_labels_binary,
         test_labels=test_labels_binary,
+        layout_mode=layout_mode,
+        prediction_mode=PredictionMode.BINARY,
         num_classes=2,
+        share_across_squares=share_sq,
+        share_across_layers=share_la,
         probe_epochs=probe_epochs,
         probe_batch_size=probe_batch_size,
         estimator=estimator,
+        activation_batch_size=probe_batch_size,
     )
     logger.info("Binary probe complete.")
 
     save_dir = Path(save_dir or "results/mate_in_3_probing/default")
     save_dir.mkdir(parents=True, exist_ok=True)
-    (save_dir / "binary_metrics.json").write_text(
-        json.dumps(probing.extract_layer_accuracies(results_binary), indent=2),
-        encoding="utf-8",
+    save_probe_metric_breakdowns(
+        save_dir,
+        stem="binary",
+        results=results_binary,
+        report_metric=report_metric_binary,
     )
 
     if move_probe_mode == "full":
         train_labels_move = torch.tensor([s.move_idx for s in train_mate_move], dtype=torch.long)
         test_labels_move = torch.tensor([s.move_idx for s in test_mate_move], dtype=torch.long)
-        results_move = probing.run_probing(
+        results_move = run_probing_layout(
             model=model,
             train_boards=train_mate_move,
             test_boards=test_mate_move,
             train_labels=train_labels_move,
             test_labels=test_labels_move,
+            layout_mode=layout_mode,
+            prediction_mode=PredictionMode.MULTICLASS,
             num_classes=num_classes_move,
+            share_across_squares=share_sq,
+            share_across_layers=share_la,
             probe_epochs=probe_epochs,
             probe_batch_size=probe_batch_size,
             estimator=estimator,
+            activation_batch_size=probe_batch_size,
         )
         logger.info("Move probe complete.")
-        (save_dir / "move_metrics.json").write_text(
-            json.dumps(probing.extract_layer_accuracies(results_move), indent=2),
-            encoding="utf-8",
+        save_probe_metric_breakdowns(
+            save_dir,
+            stem="move",
+            results=results_move,
+            report_metric=report_metric_move,
         )
     else:
         assert move_probe_mode == "double"
         train_labels_from = torch.tensor(
             [
-                probing.move_idx_to_squares(s.move_idx, s.board if not rotate_moves else None, rotate_moves)[0]
+                probing.move_idx_to_squares(s.move_idx, None if rotate_moves else s.board, rotate_moves)[0]
                 for s in train_mate_move
             ],
             dtype=torch.long,
         )
         train_labels_to = torch.tensor(
             [
-                probing.move_idx_to_squares(s.move_idx, s.board if not rotate_moves else None, rotate_moves)[1]
+                probing.move_idx_to_squares(s.move_idx, None if rotate_moves else s.board, rotate_moves)[1]
                 for s in train_mate_move
             ],
             dtype=torch.long,
         )
         test_labels_from = torch.tensor(
             [
-                probing.move_idx_to_squares(s.move_idx, s.board if not rotate_moves else None, rotate_moves)[0]
+                probing.move_idx_to_squares(s.move_idx, None if rotate_moves else s.board, rotate_moves)[0]
                 for s in test_mate_move
             ],
             dtype=torch.long,
         )
         test_labels_to = torch.tensor(
             [
-                probing.move_idx_to_squares(s.move_idx, s.board if not rotate_moves else None, rotate_moves)[1]
+                probing.move_idx_to_squares(s.move_idx, None if rotate_moves else s.board, rotate_moves)[1]
                 for s in test_mate_move
             ],
             dtype=torch.long,
         )
-        results_from = probing.run_probing(
+        results_from = run_probing_layout(
             model=model,
             train_boards=train_mate_move,
             test_boards=test_mate_move,
             train_labels=train_labels_from,
             test_labels=test_labels_from,
+            layout_mode=layout_mode,
+            prediction_mode=PredictionMode.MULTICLASS,
             num_classes=64,
+            share_across_squares=share_sq,
+            share_across_layers=share_la,
             probe_epochs=probe_epochs,
             probe_batch_size=probe_batch_size,
             estimator=estimator,
+            activation_batch_size=probe_batch_size,
         )
         logger.info("From-square probe complete.")
-        results_to = probing.run_probing(
+        results_to = run_probing_layout(
             model=model,
             train_boards=train_mate_move,
             test_boards=test_mate_move,
             train_labels=train_labels_to,
             test_labels=test_labels_to,
+            layout_mode=layout_mode,
+            prediction_mode=PredictionMode.MULTICLASS,
             num_classes=64,
+            share_across_squares=share_sq,
+            share_across_layers=share_la,
             probe_epochs=probe_epochs,
             probe_batch_size=probe_batch_size,
             estimator=estimator,
+            activation_batch_size=probe_batch_size,
         )
         logger.info("To-square probe complete.")
-        (save_dir / "from_square_metrics.json").write_text(
-            json.dumps(probing.extract_layer_accuracies(results_from), indent=2),
-            encoding="utf-8",
+        save_probe_metric_breakdowns(
+            save_dir,
+            stem="from_square",
+            results=results_from,
+            report_metric=report_metric_move,
         )
-        (save_dir / "to_square_metrics.json").write_text(
-            json.dumps(probing.extract_layer_accuracies(results_to), indent=2),
-            encoding="utf-8",
+        save_probe_metric_breakdowns(
+            save_dir,
+            stem="to_square",
+            results=results_to,
+            report_metric=report_metric_move,
         )
 
     del model

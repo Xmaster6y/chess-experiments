@@ -9,7 +9,11 @@ import torch
 from tensordict import TensorDict
 
 from chess_experiments.activations import collect_backbone_activations
-from chess_experiments.probe_training import run_per_layer_probes_for_squares, run_per_layer_sklearn_probes
+from chess_experiments.probe_training import (
+    run_per_layer_linear_probes,
+    run_per_layer_probes_for_squares,
+    run_per_layer_sklearn_probes,
+)
 
 from scripts.constants import BACKBONE_PATTERN, D_LATENT
 
@@ -70,6 +74,7 @@ def run_probing_64_binary_squares(
     probe_epochs: int = 20,
     probe_batch_size: int = 64,
     estimator: str = "linear",
+    input_encoding=None,
 ) -> dict:
     """64 binary probes (one per square); single activation cache, sklearn per layer."""
     assert train_labels_64.shape[-1] == 64 and test_labels_64.shape[-1] == 64
@@ -80,10 +85,18 @@ def run_probing_64_binary_squares(
 
     pattern = backbone_pattern or BACKBONE_PATTERN
     layer_keys, train_act = collect_backbone_activations(
-        model, train_boards, backbone_pattern=pattern, batch_size=probe_batch_size
+        model,
+        train_boards,
+        backbone_pattern=pattern,
+        batch_size=probe_batch_size,
+        input_encoding=input_encoding,
     )
     _, test_act = collect_backbone_activations(
-        model, test_boards, backbone_pattern=pattern, batch_size=probe_batch_size
+        model,
+        test_boards,
+        backbone_pattern=pattern,
+        batch_size=probe_batch_size,
+        input_encoding=input_encoding,
     )
 
     per_square_metrics = run_per_layer_probes_for_squares(
@@ -92,7 +105,10 @@ def run_probing_64_binary_squares(
         test_act,
         train_labels_64,
         test_labels_64,
-        compute_metrics=_compute_binary_acc_f1,
+        estimator=estimator,
+        probe_epochs=probe_epochs,
+        probe_batch_size=probe_batch_size,
+        compute_metrics=compute_binary_acc_f1,
     )
 
     layer_names = list(extract_layer_metric(per_square_metrics[0], "acc").keys())
@@ -111,8 +127,7 @@ def extract_layer_metric(metrics: dict, key: str) -> dict[str, float]:
     out = {}
     for k, val in metrics.items():
         if isinstance(val, dict) and key in val:
-            m = re.search(r"block(\d+)", k)
-            if m:
+            if m := re.search(r"block(\d+)", k):
                 v = val[key]
                 if isinstance(v, (int, float)) and not (isinstance(v, float) and np.isnan(v)):
                     out[f"block{m.group(1)}"] = float(v)
@@ -145,14 +160,14 @@ def _macro_mean_metric_by_layer(
     return macro
 
 
-def _compute_accuracy(predictions: torch.Tensor | np.ndarray, labels: torch.Tensor | np.ndarray) -> dict:
+def compute_accuracy(predictions: torch.Tensor | np.ndarray, labels: torch.Tensor | np.ndarray) -> dict:
     preds = predictions.cpu().numpy() if hasattr(predictions, "cpu") else np.asarray(predictions)
     labs = labels.cpu().numpy() if hasattr(labels, "cpu") else np.asarray(labels)
     acc = (preds == labs).mean()
     return {"acc": float(acc)}
 
 
-def _compute_binary_acc_f1(predictions: torch.Tensor | np.ndarray, labels: torch.Tensor | np.ndarray) -> dict:
+def compute_binary_acc_f1(predictions: torch.Tensor | np.ndarray, labels: torch.Tensor | np.ndarray) -> dict:
     """Accuracy and binary F1 (positive class = 1, touched); F1 is NaN if test labels are single-class."""
     from sklearn.metrics import f1_score
 
@@ -165,6 +180,19 @@ def _compute_binary_acc_f1(predictions: torch.Tensor | np.ndarray, labels: torch
         f1 = float("nan")
     else:
         f1 = float(f1_score(labs, preds, average="binary", pos_label=1, zero_division=0))
+    return {"acc": acc, "f1": f1}
+
+
+def compute_multiclass_acc_f1(predictions: torch.Tensor | np.ndarray, labels: torch.Tensor | np.ndarray) -> dict:
+    """Accuracy and macro-F1 for multiclass labels."""
+    from sklearn.metrics import f1_score
+
+    preds = predictions.cpu().numpy() if hasattr(predictions, "cpu") else np.asarray(predictions)
+    labs = labels.cpu().numpy() if hasattr(labels, "cpu") else np.asarray(labels)
+    preds = preds.astype(np.int64, copy=False).ravel()
+    labs = labs.astype(np.int64, copy=False).ravel()
+    acc = float((preds == labs).mean())
+    f1 = float(f1_score(labs, preds, average="macro", zero_division=0))
     return {"acc": acc, "f1": f1}
 
 
@@ -182,6 +210,7 @@ def run_probing(
     estimator: str = "linear",
     compute_metrics: Callable[..., dict] | None = None,
     activation_batch_size: int | None = None,
+    input_encoding=None,
 ) -> dict:
     """Per-layer probes on cached backbone activations (sklearn on flattened [C*H*W]).
 
@@ -197,14 +226,34 @@ def run_probing(
     act_bs = activation_batch_size if activation_batch_size is not None else probe_batch_size
 
     layer_keys, train_act = collect_backbone_activations(
-        model, train_boards, backbone_pattern=pattern, batch_size=act_bs
+        model,
+        train_boards,
+        backbone_pattern=pattern,
+        batch_size=act_bs,
+        input_encoding=input_encoding,
     )
-    _, test_act = collect_backbone_activations(model, test_boards, backbone_pattern=pattern, batch_size=act_bs)
+    _, test_act = collect_backbone_activations(
+        model,
+        test_boards,
+        backbone_pattern=pattern,
+        batch_size=act_bs,
+        input_encoding=input_encoding,
+    )
 
     if compute_metrics is None:
-        compute_metrics = _compute_accuracy
+        compute_metrics = compute_accuracy
 
-    return run_per_layer_sklearn_probes(
+    if estimator == "sklearn":
+        return run_per_layer_sklearn_probes(
+            layer_keys,
+            train_act,
+            test_act,
+            train_labels,
+            test_labels,
+            num_classes=num_classes,
+            compute_metrics=compute_metrics,
+        )
+    return run_per_layer_linear_probes(
         layer_keys,
         train_act,
         test_act,
@@ -212,6 +261,8 @@ def run_probing(
         test_labels,
         num_classes=num_classes,
         compute_metrics=compute_metrics,
+        probe_epochs=probe_epochs,
+        probe_batch_size=probe_batch_size,
     )
 
 
@@ -227,6 +278,7 @@ def run_cross_model_probing(
     probe_epochs: int = 20,
     probe_batch_size: int = 64,
     activation_batch_size: int | None = None,
+    input_encoding=None,
 ) -> dict:
     """Source activations, target policy labels; metrics per layer. ``probe_epochs`` unused.
 
@@ -238,8 +290,9 @@ def run_cross_model_probing(
     pattern = backbone_pattern or BACKBONE_PATTERN
     act_bs = activation_batch_size if activation_batch_size is not None else probe_batch_size
 
-    board_tensor_train = target_model.prepare_boards(*train_boards)
-    board_tensor_test = target_model.prepare_boards(*test_boards)
+    board_kwargs = {"input_encoding": input_encoding} if input_encoding is not None else {}
+    board_tensor_train = target_model.prepare_boards(*train_boards, **board_kwargs)
+    board_tensor_test = target_model.prepare_boards(*test_boards, **board_kwargs)
 
     with torch.no_grad():
         target_out_train = target_model(TensorDict({"board": board_tensor_train}, batch_size=[len(train_boards)]))
@@ -264,9 +317,19 @@ def run_cross_model_probing(
         )
 
     layer_keys, train_act = collect_backbone_activations(
-        source_model, train_boards, backbone_pattern=pattern, batch_size=act_bs
+        source_model,
+        train_boards,
+        backbone_pattern=pattern,
+        batch_size=act_bs,
+        input_encoding=input_encoding,
     )
-    _, test_act = collect_backbone_activations(source_model, test_boards, backbone_pattern=pattern, batch_size=act_bs)
+    _, test_act = collect_backbone_activations(
+        source_model,
+        test_boards,
+        backbone_pattern=pattern,
+        batch_size=act_bs,
+        input_encoding=input_encoding,
+    )
 
     return run_per_layer_sklearn_probes(
         layer_keys,
@@ -275,5 +338,5 @@ def run_cross_model_probing(
         labels_train,
         labels_test,
         num_classes=num_classes,
-        compute_metrics=_compute_accuracy,
+        compute_metrics=compute_accuracy,
     )

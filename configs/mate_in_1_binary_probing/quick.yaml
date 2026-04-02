@@ -1,0 +1,9 @@
+defaults:
+  - base
+
+n_mate_train: 128
+n_non_mate_train: 128
+n_mate_test: 32
+n_non_mate_test: 32
+probe_train:
+  epochs: 10

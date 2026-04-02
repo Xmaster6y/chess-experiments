@@ -1,9 +1,0 @@
-defaults:
-  - base
-  - /probing/mate_move_per_square
-  - /probe/sklearn
-
-n_mate_binary: 64
-n_non_mate: 64
-n_mate_move_train: 128
-n_mate_move_test: 32

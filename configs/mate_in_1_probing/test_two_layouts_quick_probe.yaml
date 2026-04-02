@@ -1,9 +1,0 @@
-defaults:
-  - base
-  - /probing/mate_move_two_layouts
-  - /probe/quick
-
-n_mate_binary: 48
-n_non_mate: 48
-n_mate_move_train: 96
-n_mate_move_test: 24

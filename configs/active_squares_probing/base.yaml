@@ -1,9 +1,10 @@
 defaults:
-  - /probing/no_layout
-  - /probe/linear_binary_64
+  - /_layout_probe@layout_probe: per_layer
+  - /_probe_train@probe_train: linear
   - sampling: perplexity_pruned
   - _self_
 
+model: lczerolens/maia-1100
 dataset: lczerolens/tcec-boards
 n_roots_train: 200
 n_roots_test: 50

@@ -9,6 +9,18 @@ if TYPE_CHECKING:
     from lczerolens import LczeroBoard, LczeroModel
 
 
+def resolve_input_encoding(input_encoding: str | None):
+    """Resolve lczerolens InputEncoding enum from string name."""
+    if input_encoding is None:
+        return None
+    from lczerolens.board import InputEncoding
+
+    try:
+        return getattr(InputEncoding, str(input_encoding))
+    except AttributeError as exc:
+        raise ValueError(f"Unknown input encoding: {input_encoding!r}") from exc
+
+
 def load_model(model_id: str) -> "LczeroModel":
     """Load LczeroModel from HuggingFace."""
     from lczerolens import LczeroModel
@@ -18,13 +30,18 @@ def load_model(model_id: str) -> "LczeroModel":
     return model
 
 
-def get_policy_size(model: "LczeroModel", sample_board: "LczeroBoard | None" = None) -> int:
+def get_policy_size(
+    model: "LczeroModel",
+    sample_board: "LczeroBoard | None" = None,
+    input_encoding=None,
+) -> int:
     """Get policy output size (num_classes) from model."""
     if sample_board is None:
         from lczerolens import LczeroBoard
 
         sample_board = LczeroBoard()
-    td = TensorDict({"board": model.prepare_boards(sample_board)}, batch_size=1)
+    board_kwargs = {"input_encoding": input_encoding} if input_encoding is not None else {}
+    td = TensorDict({"board": model.prepare_boards(sample_board, **board_kwargs)}, batch_size=1)
     return model(td)["policy"].shape[-1]
 
 

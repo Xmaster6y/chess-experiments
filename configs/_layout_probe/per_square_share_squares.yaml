@@ -1,0 +1,4 @@
+mode: per_square
+sharing:
+  across_squares: true
+  across_layers: false

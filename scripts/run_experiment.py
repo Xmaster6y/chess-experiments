@@ -5,7 +5,9 @@ Run a script with its config:
 
 ```bash
 uv run -m scripts.run_experiment puzzle_stats=base
-uv run -m scripts.run_experiment mate_in_1_probing=base
+uv run -m scripts.run_experiment mate_in_1_binary_probing=base
+uv run -m scripts.run_experiment mate_in_1_move_probing=base
+uv run -m scripts.run_experiment mate_in_1_active_squares_probing=base
 uv run -m scripts.run_experiment mate_in_3_probing=base
 uv run -m scripts.run_experiment piece_pruning=base
 uv run -m scripts.run_experiment active_squares_probing=quick
@@ -28,7 +30,9 @@ from omegaconf import DictConfig, OmegaConf
 
 from scripts.active_squares_probing import main as run_active_squares_probing
 from scripts.cross_model_probing import main as run_cross_model_probing
-from scripts.mate_in_1_probing import main as run_mate_in_1_probing
+from scripts.mate_in_1_active_squares_probing import main as run_mate_in_1_active_squares_probing
+from scripts.mate_in_1_binary_probing import main as run_mate_in_1_binary_probing
+from scripts.mate_in_1_move_probing import main as run_mate_in_1_move_probing
 from scripts.mate_in_3_probing import main as run_mate_in_3_probing
 from scripts.piece_pruning import main as run_piece_pruning
 from scripts.puzzle_stats import main as run_puzzle_stats
@@ -36,7 +40,9 @@ from scripts.puzzle_stats import main as run_puzzle_stats
 SCRIPTS = {
     "puzzle_stats": run_puzzle_stats,
     "active_squares_probing": run_active_squares_probing,
-    "mate_in_1_probing": run_mate_in_1_probing,
+    "mate_in_1_binary_probing": run_mate_in_1_binary_probing,
+    "mate_in_1_move_probing": run_mate_in_1_move_probing,
+    "mate_in_1_active_squares_probing": run_mate_in_1_active_squares_probing,
     "mate_in_3_probing": run_mate_in_3_probing,
     "cross_model_probing": run_cross_model_probing,
     "piece_pruning": run_piece_pruning,
@@ -59,13 +65,11 @@ def main(cfg: DictConfig):
 
     name = selected[0]
     try:
-        override_dir = HydraConfig.get().job.override_dirname
+        choice = HydraConfig.get().runtime.choices.get(name)
     except Exception:
-        override_dir = None
-    if override_dir:
-        save_dir = f"results/{override_dir.replace('=', '/')}"
-    else:
-        save_dir = f"results/{name}/default"
+        choice = None
+    save_leaf = str(choice) if choice else "default"
+    save_dir = f"results/{name}/{save_leaf}"
     SCRIPTS[name](cfg, save_dir=save_dir)
 
 

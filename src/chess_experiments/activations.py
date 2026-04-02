@@ -33,6 +33,7 @@ def collect_backbone_activations(
     batch_size: int = 64,
     in_keys: list[str] | None = None,
     out_keys: list[str] | None = None,
+    input_encoding=None,
 ) -> tuple[list[str], torch.Tensor]:
     """Run forwards with ActivationCaching; return (layer_keys, tensor [L, B, C, H, W]).
 
@@ -53,7 +54,8 @@ def collect_backbone_activations(
     with ActivationCaching(pattern).prepare(model, in_keys=in_keys, out_keys=out_keys) as hooked:
         for start in range(0, len(boards), batch_size):
             batch = boards[start : start + batch_size]
-            board_t = model.prepare_boards(*[_get_board(b) for b in batch])
+            board_kwargs = {"input_encoding": input_encoding} if input_encoding is not None else {}
+            board_t = model.prepare_boards(*[_get_board(b) for b in batch], **board_kwargs)
             td = TensorDict({"board": board_t}, batch_size=[len(batch)])
             with torch.no_grad():
                 hooked(td)

@@ -1,0 +1,4 @@
+mode: individual
+sharing:
+  across_squares: false
+  across_layers: true

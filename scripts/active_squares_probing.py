@@ -9,18 +9,19 @@ import torch
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
-from chess_experiments import active_squares, datasets, models, probing
+from chess_experiments import active_squares, datasets, models
 from chess_experiments.layout_probing import (
     PredictionMode,
     ProbeLayout,
     macro_mean_metric,
-    resolve_probing_block,
+    resolve_layout_probe_block,
     run_probing_layout,
+    save_probe_metric_breakdowns,
 )
 from chess_experiments.probing_validate import (
-    probe_field,
+    probe_train_field,
     validate_active_squares_task,
-    validate_probing_block_for_square_labels,
+    validate_layout_probe_for_square_labels,
 )
 
 
@@ -38,9 +39,9 @@ def _sanitize_for_json(obj):
 def main(cfg: DictConfig, *, save_dir: str | None = None):
     c = cfg.active_squares_probing
     validate_active_squares_task(c)
-    validate_probing_block_for_square_labels(c)
+    validate_layout_probe_for_square_labels(c)
     seed = c.get("seed", 42)
-    model_id = probe_field(c, "model")
+    model_id = c.model
     dataset_id = c.dataset
     n_roots_train = c.n_roots_train
     n_roots_test = c.n_roots_test
@@ -56,11 +57,9 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
         raise ValueError("Set sampling_mode via active_squares_probing/sampling/*.yaml defaults")
     temp_base = c.get("temp_base", 1.0)
     temp_end = c.get("temp_end", 2.0)
-    probe_epochs = probe_field(c, "probe_epochs")
-    probe_batch_size = probe_field(c, "probe_batch_size")
-    estimator = probe_field(c, "estimator")
-    pred_mode = PredictionMode(str(probe_field(c, "prediction_mode")))
-    activation_batch_size = int(probe_field(c, "activation_batch_size"))
+    probe_epochs = c.probe_train.get("epochs", 0)
+    probe_batch_size = probe_train_field(c, "batch_size")
+    estimator = probe_train_field(c, "estimator")
     fen = c.get("fen")
 
     rng = np.random.default_rng(seed)
@@ -127,96 +126,63 @@ def main(cfg: DictConfig, *, save_dir: str | None = None):
     train_labels_64 = torch.tensor(train_y, dtype=torch.float32)
     test_labels_64 = torch.tensor(test_y, dtype=torch.float32)
 
-    layout_modes, (share_sq, share_la) = resolve_probing_block(c)
+    layout_mode_str, (share_sq, share_la) = resolve_layout_probe_block(c)
+    layout_mode = ProbeLayout(layout_mode_str)
+    pred_mode = PredictionMode.BINARY
 
     save_dir = Path(save_dir or "results/active_squares_probing/default")
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    if layout_modes:
-        train_l = train_labels_64.long()
-        test_l = test_labels_64.long()
-        layout_runs = []
-        for mode_str in layout_modes:
-            mode = ProbeLayout(mode_str)
-            logger.info(
-                f"Active-squares layout probe: layout={mode.value} "
-                f"probe_sharing={OmegaConf.select(c, 'probing.probe_sharing')}"
-            )
-            res = run_probing_layout(
-                model=model,
-                train_boards=train_boards,
-                test_boards=test_boards,
-                train_labels=train_l,
-                test_labels=test_l,
-                layout_mode=mode,
-                prediction_mode=pred_mode,
-                num_classes=2,
-                share_across_squares=share_sq,
-                share_across_layers=share_la,
-                activation_batch_size=activation_batch_size,
-                probe_epochs=probe_epochs,
-                probe_batch_size=probe_batch_size,
-                estimator=estimator,
-            )
-            per_probe = res["per_probe"]
-            layout_runs.append(
-                {
-                    "task": "active_squares_touched",
-                    "layout_mode": res["layout_mode"],
-                    "prediction_mode": res["prediction_mode"],
-                    "n_probes": len(per_probe),
-                    "macro_mean_acc": macro_mean_metric(per_probe, "acc"),
-                    "macro_mean_f1": macro_mean_metric(per_probe, "f1"),
-                    **({"per_probe": per_probe} if len(per_probe) <= 128 else {}),
-                }
-            )
-        out = {
-            "layout_probe_runs": layout_runs,
-            "n_train": len(train_boards),
-            "n_test": len(test_boards),
-            "config": OmegaConf.to_container(c, resolve=True),
-        }
-    else:
-        results = probing.run_probing_64_binary_squares(
-            model=model,
-            train_boards=train_boards,
-            test_boards=test_boards,
-            train_labels_64=train_labels_64,
-            test_labels_64=test_labels_64,
-            probe_epochs=probe_epochs,
-            probe_batch_size=probe_batch_size,
-            estimator=estimator,
-        )
-
-        per_square_summary = []
-        for sq, sqm in enumerate(results["per_square"]):
-            layers_acc = probing.extract_layer_metric(sqm, "acc")
-            layers_f1 = probing.extract_layer_metric(sqm, "f1")
-            per_square_summary.append(
-                {
-                    "square": sq,
-                    "layers_acc": layers_acc,
-                    "layers_f1": layers_f1,
-                }
-            )
-
-        out = {
-            "macro_mean_acc_by_layer": results["macro_mean_acc_by_layer"],
-            "macro_mean_f1_by_layer": results["macro_mean_f1_by_layer"],
-            "per_square": per_square_summary,
-            "n_train": len(train_boards),
-            "n_test": len(test_boards),
-            "config": OmegaConf.to_container(c, resolve=True),
-        }
+    train_l = train_labels_64.long()
+    test_l = test_labels_64.long()
+    logger.info(
+        f"Active-squares layout probe: layout={layout_mode.value} "
+        f"sharing={OmegaConf.select(c, 'layout_probe.sharing')}"
+    )
+    res = run_probing_layout(
+        model=model,
+        train_boards=train_boards,
+        test_boards=test_boards,
+        train_labels=train_l,
+        test_labels=test_l,
+        layout_mode=layout_mode,
+        prediction_mode=pred_mode,
+        num_classes=2,
+        share_across_squares=share_sq,
+        share_across_layers=share_la,
+        activation_batch_size=probe_batch_size,
+        probe_epochs=probe_epochs,
+        probe_batch_size=probe_batch_size,
+        estimator=estimator,
+    )
+    save_probe_metric_breakdowns(
+        save_dir,
+        stem="active_squares",
+        results=res,
+        report_metric="f1",
+    )
+    per_probe = res["per_probe"]
+    out = {
+        "layout_probe_runs": [
+            {
+                "task": "active_squares_touched",
+                "layout_mode": res["layout_mode"],
+                "prediction_mode": res["prediction_mode"],
+                "n_probes": len(per_probe),
+                "macro_mean_acc": macro_mean_metric(per_probe, "acc"),
+                "macro_mean_f1": macro_mean_metric(per_probe, "f1"),
+                **({"per_probe": per_probe} if len(per_probe) <= 128 else {}),
+            }
+        ],
+        "n_train": len(train_boards),
+        "n_test": len(test_boards),
+        "config": OmegaConf.to_container(c, resolve=True),
+    }
     (save_dir / "metrics.json").write_text(
         json.dumps(_sanitize_for_json(out), indent=2),
         encoding="utf-8",
     )
-    if layout_modes:
-        logger.info(f"Layout probe runs saved ({len(layout_modes)} layout(s))")
-    else:
-        logger.info(f"Macro mean acc by layer: {out['macro_mean_acc_by_layer']}")
-        logger.info(f"Macro mean F1 by layer: {out['macro_mean_f1_by_layer']}")
+    logger.info("Layout probe run saved (1 layout)")
     logger.info(f"Saved to {save_dir}")
 
     del model

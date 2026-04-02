@@ -1,9 +1,10 @@
 defaults:
-  - /probing/no_layout
-  - /probe/quick
+  - /_layout_probe@layout_probe: per_layer
+  - /_probe_train@probe_train: linear
   - sampling: perplexity_pruned
   - _self_
 
+model: lczerolens/maia-1100
 dataset: lczerolens/tcec-boards
 n_roots_train: 8
 n_roots_test: 4
@@ -13,8 +14,8 @@ max_nodes_total: 500
 branching: perplexity
 fixed_k: null
 seed: 42
-probe:
-  probe_epochs: 2
-  probe_batch_size: 8
+probe_train:
+  epochs: 2
+  batch_size: 8
 temp_base: 1.0
 temp_end: 2.0

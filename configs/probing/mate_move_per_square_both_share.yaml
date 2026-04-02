@@ -1,5 +1,0 @@
-modes:
-  - per_square
-probe_sharing:
-  - across_squares
-  - across_layers

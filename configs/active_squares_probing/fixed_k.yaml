@@ -1,9 +1,10 @@
 defaults:
-  - /probing/no_layout
-  - /probe/small_batch
+  - /_layout_probe@layout_probe: per_layer
+  - /_probe_train@probe_train: linear
   - sampling: random
   - _self_
 
+model: lczerolens/maia-1100
 dataset: lczerolens/tcec-boards
 n_roots_train: 16
 n_roots_test: 8
@@ -13,8 +14,8 @@ max_nodes_total: 2000
 branching: fixed_k
 fixed_k: 4
 seed: 42
-probe:
-  probe_epochs: 5
-  probe_batch_size: 32
+probe_train:
+  epochs: 5
+  batch_size: 32
 temp_base: 1.0
 temp_end: 2.0

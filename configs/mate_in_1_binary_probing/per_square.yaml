@@ -1,0 +1,5 @@
+defaults:
+  - base
+  - override /_layout_probe@layout_probe: per_square
+  - override /_probe_train@probe_train: sklearn
+  - _self_
